@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  database:
+    image: mysql:8.0
+    container_name: artist_studio_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: artist_studio
+      MYSQL_USER: artist_user
+      MYSQL_PASSWORD: artist_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/Dockerfile.backend
+    container_name: artist_studio_backend
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=mysql://artist_user:artist_password@database:3306/artist_studio
+    volumes:
+      - ./backend:/var/www/html
+    depends_on:
+      - database
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/Dockerfile.frontend
+    container_name: artist_studio_frontend
+    restart: unless-stopped
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000/api
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  db_data:
+    driver: local
