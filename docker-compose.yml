@@ -1,49 +1,84 @@
 version: '3.8'
 
 services:
+  # Base de données MySQL
   database:
     image: mysql:8.0
     container_name: artist_studio_db
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: rootpassword
       MYSQL_DATABASE: artist_studio
       MYSQL_USER: artist_user
       MYSQL_PASSWORD: artist_password
     ports:
       - "3306:3306"
     volumes:
-      - db_data:/var/lib/mysql
+      - mysql_data:/var/lib/mysql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - artist_network
 
+  # Backend Symfony
   backend:
     build:
-      context: ./backend
-      dockerfile: ../docker/Dockerfile.backend
+      context: ./backend-new
+      dockerfile: Dockerfile
     container_name: artist_studio_backend
     restart: unless-stopped
+    ports:
+      - "8000:8000"
     environment:
+      - APP_ENV=prod
       - DATABASE_URL=mysql://artist_user:artist_password@database:3306/artist_studio
-    volumes:
-      - ./backend:/var/www/html
     depends_on:
       - database
+    volumes:
+      - ./backend-new:/var/www/html
+    networks:
+      - artist_network
 
+  # Frontend React
   frontend:
     build:
       context: ./frontend
-      dockerfile: ../docker/Dockerfile.frontend
+      dockerfile: Dockerfile
     container_name: artist_studio_frontend
     restart: unless-stopped
+    ports:
+      - "3000:3000"
     environment:
       - REACT_APP_API_URL=http://localhost:8000/api
+      - NODE_ENV=production
+    depends_on:
+      - backend
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    networks:
+      - artist_network
+
+  # Nginx pour la production
+  nginx:
+    image: nginx:alpine
+    container_name: artist_studio_nginx
+    restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./frontend/build:/usr/share/nginx/html
     depends_on:
+      - frontend
       - backend
+    networks:
+      - artist_network
 
 volumes:
-  db_data:
+  mysql_data:
     driver: local
+
+networks:
+  artist_network:
+    driver: bridge
