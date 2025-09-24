@@ -1,0 +1,113 @@
+# Pipeline CI/CD pour Artist Studio
+stages:
+  - test-frontend
+  - test-backend
+  - build
+  - deploy
+
+variables:
+  NODE_VERSION: "18"
+  PHP_VERSION: "8.2"
+
+# Tests Frontend
+frontend-tests:
+  stage: test-frontend
+  image: node:18-alpine
+  before_script:
+    - cd frontend
+    - npm ci
+  script:
+    - npm run test:coverage
+    - npm run build
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: frontend/coverage/cobertura-coverage.xml
+    paths:
+      - frontend/build/
+      - frontend/coverage/
+  only:
+    - main
+    - develop
+
+# Tests Backend
+backend-tests:
+  stage: test-backend
+  image: php:8.2-cli
+  services:
+    - mysql:8.0
+  variables:
+    MYSQL_DATABASE: artist_studio_test
+    MYSQL_ROOT_PASSWORD: rootpassword
+    DATABASE_URL: "mysql://root:rootpassword@mysql:3306/artist_studio_test"
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git unzip libzip-dev
+    - docker-php-ext-install pdo pdo_mysql zip
+    - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+    - cd backend-new
+    - composer install --no-dev --optimize-autoloader
+  script:
+    - vendor/bin/phpunit --coverage-text --colors=never
+  artifacts:
+    reports:
+      junit: backend-new/tests/_output/report.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: backend-new/coverage.xml
+  only:
+    - main
+    - develop
+
+# Build Docker Images
+build-images:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker-compose build
+    - docker save artist-studio_frontend > frontend-image.tar
+    - docker save artist-studio_backend > backend-image.tar
+  artifacts:
+    paths:
+      - frontend-image.tar
+      - backend-image.tar
+    expire_in: 1 hour
+  only:
+    - main
+
+# Déploiement (Staging)
+deploy-staging:
+  stage: deploy
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker load < frontend-image.tar
+    - docker load < backend-image.tar
+    - docker-compose up -d
+    - echo "Application déployée en staging"
+  environment:
+    name: staging
+    url: http://staging.artist-studio.local
+  only:
+    - develop
+
+# Déploiement (Production)
+deploy-production:
+  stage: deploy
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker load < frontend-image.tar
+    - docker load < backend-image.tar
+    - docker-compose -f docker-compose.prod.yml up -d
+    - echo "Application déployée en production"
+  environment:
+    name: production
+    url: http://artist-studio.local
+  when: manual
+  only:
+    - main
