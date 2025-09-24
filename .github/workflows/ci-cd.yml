@@ -1,0 +1,132 @@
+name: CI/CD Artist Studio
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # Tests Frontend
+  frontend-tests:
+    runs-on: ubuntu-latest
+    name: Frontend Tests & Quality
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+    
+    - name: Install dependencies
+      run: |
+        cd frontend
+        npm ci
+    
+    - name: Run ESLint
+      run: |
+        cd frontend
+        npm run lint --if-present
+    
+    - name: Run tests
+      run: |
+        cd frontend
+        npm test -- --coverage --watchAll=false
+    
+    - name: Build application
+      run: |
+        cd frontend
+        npm run build
+    
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        directory: ./frontend/coverage
+
+  # Tests Backend
+  backend-tests:
+    runs-on: ubuntu-latest
+    name: Backend Tests & Security
+    
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpassword
+          MYSQL_DATABASE: artist_studio_test
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.2'
+        extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql
+        coverage: xdebug
+    
+    - name: Cache Composer packages
+      uses: actions/cache@v3
+      with:
+        path: vendor
+        key: ${{ runner.os }}-php-${{ hashFiles('backend-new/composer.lock') }}
+    
+    - name: Install dependencies
+      run: |
+        cd backend-new
+        composer install --prefer-dist --no-progress
+    
+    - name: Run PHPUnit tests
+      run: |
+        cd backend-new
+        vendor/bin/phpunit --coverage-clover=coverage.xml
+      env:
+        DATABASE_URL: mysql://root:rootpassword@127.0.0.1:3306/artist_studio_test
+
+  # Build et déploiement
+  build-and-deploy:
+    needs: [frontend-tests, backend-tests]
+    runs-on: ubuntu-latest
+    name: Build & Deploy
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Build Docker images
+      run: |
+        docker-compose build
+    
+    - name: Run integration tests
+      run: |
+        docker-compose up -d
+        sleep 30
+        curl -f http://localhost:3000 || exit 1
+        curl -f http://localhost:8000/api/songs || exit 1
+        docker-compose down
+    
+    - name: Deploy notification
+      run: |
+        echo "✅ Déploiement réussi!"
+
+  # Notification
+  notify:
+    needs: [build-and-deploy]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Notify deployment status
+      run: |
+        if [ "${{ needs.build-and-deploy.result }}" = "success" ]; then
+          echo "✅ Pipeline réussi!"
+        else
+          echo "❌ Échec du pipeline"
+        fi
