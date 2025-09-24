@@ -1,20 +1,35 @@
-# Artist Studio - Plateforme Musicale
+# Artist Studio - Plateforme de Blog Musical
 
-Une plateforme moderne permettant aux artistes de partager leur musique et aux utilisateurs de découvrir de nouveaux talents.
+Une plateforme web moderne permettant d'écouter des chansons gratuitement et de découvrir l'histoire derrière chaque création.
 
-## Technologies
+## 🚀 Fonctionnalités
 
-- **Frontend:** React + TypeScript + Tailwind CSS
-- **Backend:** Symfony + API Platform + Doctrine
-- **Base de données:** MySQL
-- **DevOps:** Docker + GitHub Actions
+- **Écoute gratuite** de chansons sans inscription
+- **Articles de blog détaillés** pour chaque chanson
+- **Recherche avancée** par titre, artiste, genre
+- **Panel d'administration** complet
+- **Interface responsive** moderne
 
-## Installation
+## 🛠 Technologies
 
+### Frontend
+- **React 18** avec TypeScript
+- **Tailwind CSS** pour le design
+- **Axios** pour les requêtes HTTP
+
+### Backend  
+- **Symfony 6** avec API REST
+- **MySQL 8** comme base de données
+- **PHPUnit** pour les tests
+
+### DevOps
+- **Docker** & Docker Compose
+- **GitHub Actions** pour CI/CD
+
+## 📦 Installation
+
+### Avec Docker (Recommandé)
 ```bash
-# Cloner le projet
 git clone https://github.com/Persy-07/artist-studio.git
 cd artist-studio
-
-# Démarrer avec Docker
 docker-compose up -d
